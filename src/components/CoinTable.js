@@ -1,4 +1,18 @@
-import { Container, createTheme, LinearProgress, makeStyles, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ThemeProvider, Typography } from '@material-ui/core';
+import {
+    Container,
+    createTheme,
+    LinearProgress,
+    makeStyles,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    ThemeProvider,
+    Typography
+} from '@material-ui/core';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react'
 import { CoinList } from '../config/api';
@@ -21,6 +35,7 @@ const useStyles = makeStyles({
         },
     },
 });
+
 export function numberWithCommas(x) {
     return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
@@ -28,9 +43,11 @@ export function numberWithCommas(x) {
 const CoinTable = () => {
 
     const [coins, setCoins] = useState([]);
+    const [searchResult, setSearchResult] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState(true)
 
     const { currency, symbol } = CryptoState();
 
@@ -38,18 +55,56 @@ const CoinTable = () => {
     const classes = useStyles();
     const navigate = useNavigate();
 
-    const fetchCoinsData = async () => {
-        setLoading(true);
-        const { data } = await axios.get(CoinList(currency));
-        setCoins(data);
-        setLoading(false);
-    }
 
     // console.log(coins);
 
+
+    const handleSearch = () => {
+        let data = [...coins].sort((a, b) => {
+            let first = sort ? a.price_change_percentage_24h : b.price_change_percentage_24h
+            let second = sort ? b.price_change_percentage_24h : a.price_change_percentage_24h
+
+            if (first > second) return 1
+            else return -1
+        })
+        if (search.length === 0) {
+            console.log('search', search, 'all results')
+            setSearchResult(data)
+        } else {
+            let searchLC = search.toLowerCase()
+
+            setSearchResult(data.filter((coin) =>
+                coin.name.toLowerCase().indexOf(searchLC) > -1 ||
+                coin.symbol.toLowerCase().indexOf(searchLC) > -1
+            ))
+
+            console.log('search', search, 'some results', searchResult.length)
+
+        }
+    }
+
+
     useEffect(() => {
-        fetchCoinsData();
-    }, [currency])
+
+        const fetchData = async () => {
+
+            setLoading(true);
+
+            const { data } = await axios.get(CoinList(currency));
+
+            setCoins(data)
+            setSearchResult(data)
+
+            setLoading(false);
+        }
+
+        if (coins.length === 0)
+            fetchData()
+        else {
+            handleSearch()
+        }
+
+    }, [currency, sort, search])
 
     const darkTheme = createTheme({
         palette: {
@@ -61,19 +116,15 @@ const CoinTable = () => {
     });
 
 
-
-
-    const handleSearch = () => {
-        return coins.filter((coin) =>
-            coin.name.toLowerCase().includes(search) ||
-            coin.symbol.toLowerCase().includes(search)
-        )
+    const invertSort = (e) => {
+        e.preventDefault()
+        setSort(!sort)
     }
 
     return (
         <ThemeProvider theme={darkTheme}>
             <Container style={{ textAlign: 'center' }}>
-                <Typography variant='h4' style={{ margin: 18, fontFamily: 'Montserrat' }} >
+                <Typography variant='h4' style={{ margin: 18, fontFamily: 'Montserrat' }}>
                     Cryptocurrency Prices by Market Cap
                 </Typography>
 
@@ -101,13 +152,17 @@ const CoinTable = () => {
                                                 key={head}
                                                 align={head === "Coin" ? "" : "right"}
                                             >
-                                                {head}
+                                                {head === "24h Change"
+                                                    ? <a href="#" onClick={invertSort}>{head}</a>
+                                                    : <span>{head}</span>
+                                                }
+
                                             </TableCell>
                                         ))}
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {handleSearch().slice((page - 1) * 10, (page * 10)).map(row => {
+                                    {searchResult.slice((page - 1) * 10, (page * 10)).map(row => {
                                         let profit = row.price_change_percentage_24h >= 0;
                                         return (
                                             <TableRow
@@ -180,7 +235,7 @@ const CoinTable = () => {
                         justifyContent: "center",
                     }}
                     classes={{ ul: classes.pagination }}
-                    count={(handleSearch()?.length / 10).toFixed(0)}
+                    count={(searchResult.length / 10)}
                     onChange={(_, value) => {
                         setPage(value)
                         window.scroll(0, 450)
